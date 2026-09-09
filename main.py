@@ -13,10 +13,9 @@ def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     
-    today = now_kst
-    yesterday = today - timedelta(days=1)
-    bgn_dt = yesterday.strftime('%Y%m%d0000') 
-    end_dt = today.strftime('%Y%m%d2359') 
+    # 🎯 수정 포인트: 과거 데이터 찌꺼기를 버리고 '오늘 당일' 데이터만 정밀 타격
+    bgn_dt = now_kst.strftime('%Y%m%d0000') 
+    end_dt = now_kst.strftime('%Y%m%d2359') 
 
     endpoints = {
         "1단계_발주계획": f"https://apis.data.go.kr/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
@@ -46,7 +45,7 @@ def run_sniper_bot():
                     order_agency = item.get('orderInsttNm') or dept 
                     notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or "정보없음"
                     close_dt = item.get('bidClseDt') or "정보없음"
-                    open_dt = item.get('opengDt') or "정보없음"
+                    open_dt = item.get('opengDt')  or "정보없음"
                     contract_method = item.get('cntrctMthdNm') or item.get('cntrctMthd') or "정보없음"
                     budget = item.get('asignBdgtAmt') or item.get('presmptPrce') or item.get('bsnsBdgtAmt') or item.get('totPrce') or "0"
                     
