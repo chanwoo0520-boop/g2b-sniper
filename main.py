@@ -9,42 +9,49 @@ chat_id = "-5450647167"
 target_keywords = ["자연재해", "풍수해", "지방하천", "재해예방", "하천기본계획", "소하천", "소규모공공시설", "재해", "하천정비사업"]
 exclude_keywords = ["공사", "물품", "구매", "제조", "관급자재", "폐기물", "항온습기", "전기", "통신", "소방", "도서관", "학교", "아파트", "환경영향평가", "건설사업", "기술지도", "안전점검"]
 
-# 🔥 핵심 복구: 텔레그램이 막아도 뚫릴 때까지 기다렸다가 악착같이 쏘는 로직
 def send_tg(msg):
     tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    while True:
-        try:
-            res = requests.post(tg_url, data={'chat_id': chat_id, 'text': msg}, timeout=10)
-            if res.status_code == 429:
-                retry_after = res.json().get("parameters", {}).get("retry_after", 10)
-                time.sleep(retry_after + 1)
-            else:
-                break
-        except Exception as e:
-            time.sleep(5)
+    try:
+        requests.post(tg_url, data={'chat_id': chat_id, 'text': msg}, timeout=10)
+    except:
+        pass
+
+# 🔥 핵심 무기 1: 어떤 게시판이든 스스로 제목을 찾아내는 인공지능 탐색기
+def get_title(item):
+    for key in ['bidNtceNm', 'pblancNm', 'bsnsNm', 'rcptNm', 'prdctNm', 'cnstwkNm', 'servcNm', 'korPrcureTgtPrdctNm', 'prdctClsfcNoNm']:
+        if item.get(key):
+            return str(item.get(key)).strip()
+    
+    # 정해진 이름이 없으면 딕셔너리를 뒤져서 '이름(Nm)'으로 끝나는 긴 문장을 강제로 뽑아냄
+    for k, v in item.items():
+        if isinstance(v, str) and k.endswith('Nm') and 'instt' not in k.lower() and len(v) > 5:
+            return v.strip()
+    return "제목 없음"
+
+def get_no(item):
+    for key in ['bidNtceNo', 'pblancNo', 'bfSpecRegNo', 'rcptNo', 'prcureRqNo']:
+        if item.get(key):
+            return str(item.get(key)).strip()
+    return "번호없음"
 
 def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
-    now_kst = datetime.now(KST)
+    now = datetime.now(KST)
+    send_tg(f"🚀 [V5 시스템 리셋] 땜질 코드 폐기, 백지에서 정찰을 시작합니다. ({now.strftime('%H:%M')})")
     
-    send_tg(f"🟢 [작전 개시] 조달청 레이더망 가동 ({now_kst.strftime('%H:%M')})")
-    
-    end_dt = now_kst.strftime('%Y%m%d2359') 
-    past_14_dt = (now_kst - timedelta(days=14)).strftime('%Y%m%d0000')
-    past_1_dt = (now_kst - timedelta(days=1)).strftime('%Y%m%d0000')
-
-    today_str = now_kst.strftime('%Y-%m-%d')
-    today_str_no_dash = now_kst.strftime('%Y%m%d')
-    yesterday_str = (now_kst - timedelta(days=1)).strftime('%Y-%m-%d')
-    yesterday_str_no_dash = (now_kst - timedelta(days=1)).strftime('%Y%m%d')
+    # 깔끔하게 최근 3일치 데이터만 탐색
+    past = now - timedelta(days=3)
+    bgn_dt = past.strftime('%Y%m%d0000') 
+    end_dt = now.strftime('%Y%m%d2359') 
 
     endpoints = {
-        "사전규격_용역": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={past_14_dt}&inqryEndDt={end_dt}&type=json",
-        "사전규격_공사": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureCnstwkInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={past_14_dt}&inqryEndDt={end_dt}&type=json",
-        "사전규격_물품": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={past_14_dt}&inqryEndDt={end_dt}&type=json",
-        "입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=2&inqryBgnDt={past_1_dt}&inqryEndDt={end_dt}&type=json"
+        "1단계_발주계획": f"https://apis.data.go.kr/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_용역": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_공사": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureCnstwkInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_물품": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "3단계_입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json"
     }
-    
+
     found_count = 0
     total_scanned = 0
 
@@ -52,70 +59,71 @@ def run_sniper_bot():
         try:
             res = requests.get(url, timeout=15)
             if res.status_code != 200 or not res.text.lstrip().startswith('{'):
-                send_tg(f"⚠️ [{stage_name}] 조달청 통신 실패 (API 에러)")
                 continue
             
             data = res.json()
             items = data.get('response', {}).get('body', {}).get('items', [])
+            if not items:
+                continue
+                
+            # 조달청 API 구조가 딕셔너리로 올 경우 리스트로 강제 변환 (에러 방지)
+            if isinstance(items, dict):
+                items = [items]
+                
             total_scanned += len(items)
             
             for item in items:
                 item_str = str(item)
-                
-                # 사전규격 기괴한 변수명 완벽 지원
-                title_candidates = [
-                    item.get('pblancNm'), item.get('bidNtceNm'), item.get('bsnsNm'), 
-                    item.get('rcptNm'), item.get('prdctNm'), item.get('swBizNm'), 
-                    item.get('cnstwkNm'), item.get('servcNm'), 
-                    item.get('korPrcureTgtPrdctNm'), item.get('prdctClsfcNoNm'), item.get('svyNm')
-                ]
-                title = next((t for t in title_candidates if t), "제목 없음")
+                title = get_title(item)
                 dept = item.get('dminsttNm') or item.get('demandInsttNm') or item.get('orderInsttNm') or item.get('insttNm') or "기관명 없음"
                 
-                has_target = any(keyword in item_str for keyword in target_keywords)
-                has_exclude = any(bad_word in title for bad_word in exclude_keywords)
+                # 🔥 핵심 무기 2: 타겟은 전체에서 찾고, 제외어는 제목에서 거르되 제목이 없으면 전체에서 거름 (완벽 차단)
+                has_target = any(kw in item_str for kw in target_keywords)
+                
+                if title == "제목 없음":
+                    has_exclude = any(bw in item_str for bw in exclude_keywords)
+                else:
+                    has_exclude = any(bw in title for bw in exclude_keywords)
                 
                 if has_target and not has_exclude:
-                    notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or item.get('opnnRegClseDt') or "정보없음"
+                    found_count += 1
+                    notice_no = get_no(item)
+                    notice_ord = item.get('bidNtceOrd') or item.get('pblancOrd') or "00"
                     
-                    is_recent = (today_str in notice_dt) or (today_str_no_dash in notice_dt) or (yesterday_str in notice_dt) or (yesterday_str_no_dash in notice_dt)
+                    if notice_no != "번호없음" and "사전규격" not in stage_name:
+                        full_notice_no = f"{notice_no}-{notice_ord}"
+                    else:
+                        full_notice_no = notice_no
+
+                    notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or "정보없음"
                     
-                    if is_recent:
-                        found_count += 1
-                        notice_no = item.get('bidNtceNo') or item.get('pblancNo') or item.get('bfSpecRegNo') or item.get('rcptNo') or item.get('prcureRqNo') or "번호없음"
-                        notice_ord = item.get('bidNtceOrd') or item.get('pblancOrd') or "00"
-                        
-                        if notice_no != "번호없음" and "사전규격" not in stage_name:
-                            full_notice_no = f"{notice_no}-{notice_ord}"
-                        else:
-                            full_notice_no = notice_no
+                    budget = item.get('asignBdgtAmt') or item.get('presmptPrce') or item.get('bsnsBdgtAmt') or item.get('totPrce') or "0"
+                    try:
+                        budget_str = f"{int(float(budget)):,}원" if budget != "0" else "정보없음"
+                    except:
+                        budget_str = str(budget)
 
-                        budget = item.get('asignBdgtAmt') or item.get('presmptPrce') or item.get('bsnsBdgtAmt') or item.get('totPrce') or item.get('asignBdgtAm') or "0"
-                        try:
-                            budget_str = f"{int(float(budget)):,}원" if budget != "0" else "정보없음"
-                        except:
-                            budget_str = str(budget)
+                    if "사전규격" in stage_name:
+                        detail_url = f"https://www.g2b.go.kr/link/PRVA004_02/?bfSpecRegNo={notice_no}"
+                    else:
+                        detail_url = f"https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo={notice_no}&bidPbancOrd={notice_ord}"
 
-                        if "사전규격" in stage_name:
-                            detail_url = f"https://www.g2b.go.kr/link/PRVA004_02/?bfSpecRegNo={notice_no}"
-                        else:
-                            detail_url = f"https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo={notice_no}&bidPbancOrd={notice_ord}"
-
-                        msg = (
-                            f"🚨 [{stage_name}] 새 공고 포착\n"
-                            f"공고명: {title}\n"
-                            f"공고번호: {full_notice_no}\n"
-                            f"기관명: {dept}\n"
-                            f"날짜: {notice_dt}\n"
-                            f"예산: {budget_str}\n"
-                            f"{detail_url}"
-                        )
-                        send_tg(msg)
-                        time.sleep(1.5)
+                    msg = (
+                        f"🚨 [{stage_name}] 새 공고 포착\n"
+                        f"공고명: {title}\n"
+                        f"공고번호: {full_notice_no}\n"
+                        f"수요기관: {dept}\n"
+                        f"공고일시: {notice_dt}\n"
+                        f"배정예산액: {budget_str}\n"
+                        f"{detail_url}"
+                    )
+                    send_tg(msg)
+                    time.sleep(1.0)
+                    
         except Exception as e:
-            send_tg(f"⚠️ [{stage_name}] 내부 에러 발생")
+            continue # 에러 나도 멈추지 않고 다음 게시판으로 넘어감
 
-    send_tg(f"🏁 [스캔 완료] 조달청 공고 총 {total_scanned}건 검사 완료.\n- 타겟 발견 및 전송: {found_count}건")
+    send_tg(f"🏁 [V5 스캔 완료] 총 {total_scanned}건 검사, {found_count}건 전송 완료.")
 
 if __name__ == "__main__":
     run_sniper_bot()
