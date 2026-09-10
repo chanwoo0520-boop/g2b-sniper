@@ -16,10 +16,12 @@ def run_sniper_bot():
     bgn_dt = now_kst.strftime('%Y%m%d0000') 
     end_dt = now_kst.strftime('%Y%m%d2359') 
 
+    # 🔥 수정 포인트: 공무원이 어디에 올리든 다 잡기 위해 사전규격을 용역, 공사, 물품 3개로 나눠서 전부 털어버립니다.
     endpoints = {
         "1단계_발주계획": f"https://apis.data.go.kr/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        # 🎯 핵심 수정: ThngInfoServc(물품) -> ServcInfoServc(용역)으로 완벽 교체
-        "2단계_사전규격": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_용역": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_공사": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureCnstwkInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_물품": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
         "3단계_입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json"
     }
 
@@ -32,25 +34,28 @@ def run_sniper_bot():
             items = data.get('response', {}).get('body', {}).get('items', [])
             
             for item in items:
-                # 사전규격(용역) 전용 이름 필드까지 추가 탐색
-                title = item.get('pblancNm') or item.get('bidNtceNm') or item.get('bsnsNm') or item.get('rcptNm') or item.get('prdctNm') or item.get('swBizNm') or "제목 없음"
+                # 데이터를 통째로 텍스트로 변환해서 단 한 글자의 키워드라도 스치면 포착하게 만듭니다.
+                item_str = str(item)
+                
+                title_candidates = [item.get('pblancNm'), item.get('bidNtceNm'), item.get('bsnsNm'), item.get('rcptNm'), item.get('prdctNm'), item.get('swBizNm'), item.get('cnstwkNm'), item.get('servcNm')]
+                title = next((t for t in title_candidates if t), "제목 없음")
                 dept = item.get('dminsttNm') or item.get('demandInsttNm') or item.get('orderInsttNm') or item.get('insttNm') or "기관명 없음"
                 
-                has_target = any(keyword in title for keyword in target_keywords)
+                # 타겟은 딕셔너리 전체에서 샅샅이 뒤지고, 제외어는 엄격하게 '제목'에 있을 때만 버립니다.
+                has_target = any(keyword in item_str for keyword in target_keywords)
                 has_exclude = any(bad_word in title for bad_word in exclude_keywords)
                 
                 if has_target and not has_exclude:
-                    # 🎯 수정: 사전규격 전용 등록번호(bfSpecRegNo) 추가
                     notice_no = item.get('bidNtceNo') or item.get('pblancNo') or item.get('bfSpecRegNo') or "번호없음"
                     notice_ord = item.get('bidNtceOrd') or item.get('pblancOrd') or "00"
                     
-                    if notice_no != "번호없음" and stage_name != "2단계_사전규격":
+                    if notice_no != "번호없음" and "사전규격" not in stage_name:
                         full_notice_no = f"{notice_no}-{notice_ord}"
                     else:
                         full_notice_no = notice_no
 
                     order_agency = item.get('orderInsttNm') or dept 
-                    notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or "정보없음"
+                    notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or item.get('opnnRegClseDt') or "정보없음"
                     close_dt = item.get('bidClseDt') or item.get('opnnFnsDt') or "정보없음"
                     open_dt = item.get('opengDt')  or "정보없음"
                     contract_method = item.get('cntrctMthdNm') or item.get('cntrctMthd') or "정보없음"
@@ -63,9 +68,8 @@ def run_sniper_bot():
 
                     detail_url = item.get('bidNtceDtlUrl') or item.get('pblancDtlUrl') or ""
                     
-                    # 🎯 수정: 2단계 사전규격 다이렉트 링크 완벽 매칭
                     if not detail_url and notice_no != "번호없음":
-                        if stage_name == "2단계_사전규격":
+                        if "사전규격" in stage_name:
                             detail_url = f"https://www.g2b.go.kr/link/PRVA004_02/?bfSpecRegNo={notice_no}"
                         else:
                             detail_url = f"https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo={notice_no}&bidPbancOrd={notice_ord}"
@@ -78,8 +82,6 @@ def run_sniper_bot():
                         f"공고기관: {order_agency}\n"
                         f"공고일시: {notice_dt}\n"
                         f"마감일시: {close_dt}\n"
-                        f"개찰일: {open_dt}\n"
-                        f"계약방법: {contract_method}\n"
                         f"배정예산액: {budget_str}\n"
                         f"{detail_url}"
                     )
