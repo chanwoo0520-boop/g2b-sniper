@@ -13,89 +13,101 @@ def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     
-    # 🔥 논리 오류 해결: 어제부터 오늘까지 2일치 데이터를 무조건 가져옵니다.
+    # 어제 ~ 오늘 이틀치 넉넉하게 검색
     past_kst = now_kst - timedelta(days=1) 
     bgn_dt = past_kst.strftime('%Y%m%d0000') 
     end_dt = now_kst.strftime('%Y%m%d2359') 
 
-    endpoints = {
-        "1단계_발주계획": f"https://apis.data.go.kr/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격_용역": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격_공사": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureCnstwkInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격_물품": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "3단계_입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json"
+    # pageNo 부분은 아래 반복문에서 동적으로 바꿉니다.
+    base_endpoints = {
+        "1단계_발주계획": f"https://apis.data.go.kr/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc?serviceKey={api_key}&numOfRows=999&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_용역": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "3단계_입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json"
     }
 
-    for stage_name, url in endpoints.items():
-        try:
-            res = requests.get(url, timeout=10)
-            if res.status_code != 200 or not res.text.lstrip().startswith('{'):
-                continue
-            data = res.json()
-            items = data.get('response', {}).get('body', {}).get('items', [])
+    tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+    for stage_name, base_url in base_endpoints.items():
+        # 🔥 수정 포인트: 1페이지부터 3페이지(최대 2,997건)까지 싹 다 뒤집니다.
+        for page in range(1, 4):
+            url = f"{base_url}&pageNo={page}"
             
-            for item in items:
-                item_str = str(item)
+            try:
+                res = requests.get(url, timeout=10)
                 
-                title_candidates = [item.get('pblancNm'), item.get('bidNtceNm'), item.get('bsnsNm'), item.get('rcptNm'), item.get('prdctNm'), item.get('swBizNm'), item.get('cnstwkNm'), item.get('servcNm')]
-                title = next((t for t in title_candidates if t), "제목 없음")
-                dept = item.get('dminsttNm') or item.get('demandInsttNm') or item.get('orderInsttNm') or item.get('insttNm') or "기관명 없음"
+                # 사전규격 에러 등 서버가 튕겨내면 텔레그램으로 즉시 진단 보고
+                if res.status_code != 200 or not res.text.lstrip().startswith('{'):
+                    if page == 1: # 에러 보고는 1페이지에서 한 번만
+                        error_msg = res.text[:200].replace('\n', ' ')
+                        msg = f"⚠️ [긴급 진단] {stage_name} 접근 실패!\n- 서버응답: {error_msg}"
+                        requests.post(tg_url, data={'chat_id': chat_id, 'text': msg})
+                    break 
                 
-                has_target = any(keyword in item_str for keyword in target_keywords)
-                has_exclude = any(bad_word in title for bad_word in exclude_keywords)
+                data = res.json()
+                items = data.get('response', {}).get('body', {}).get('items', [])
                 
-                # 🔥 멍청한 날짜 필터링(is_today) 삭제! 키워드만 맞으면 무조건 발송
-                if has_target and not has_exclude:
-                    notice_no = item.get('bidNtceNo') or item.get('pblancNo') or item.get('bfSpecRegNo') or "번호없음"
-                    notice_ord = item.get('bidNtceOrd') or item.get('pblancOrd') or "00"
+                # 가져올 데이터가 더 이상 없으면 다음 게시판으로 이동
+                if not items:
+                    break
+                
+                for item in items:
+                    item_str = str(item)
                     
-                    if notice_no != "번호없음" and "사전규격" not in stage_name:
-                        full_notice_no = f"{notice_no}-{notice_ord}"
-                    else:
-                        full_notice_no = notice_no
-
-                    order_agency = item.get('orderInsttNm') or dept 
-                    notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or item.get('opnnRegClseDt') or "정보없음"
-                    close_dt = item.get('bidClseDt') or item.get('opnnFnsDt') or "정보없음"
-                    contract_method = item.get('cntrctMthdNm') or item.get('cntrctMthd') or "정보없음"
-                    budget = item.get('asignBdgtAmt') or item.get('presmptPrce') or item.get('bsnsBdgtAmt') or item.get('totPrce') or item.get('asignBdgtAm') or "0"
+                    title_candidates = [item.get('pblancNm'), item.get('bidNtceNm'), item.get('bsnsNm'), item.get('rcptNm'), item.get('prdctNm'), item.get('swBizNm'), item.get('cnstwkNm'), item.get('servcNm')]
+                    title = next((t for t in title_candidates if t), "제목 없음")
+                    dept = item.get('dminsttNm') or item.get('demandInsttNm') or item.get('orderInsttNm') or item.get('insttNm') or "기관명 없음"
                     
-                    try:
-                        budget_str = f"{int(float(budget)):,}원" if budget != "0" else "정보없음"
-                    except:
-                        budget_str = str(budget)
-
-                    detail_url = item.get('bidNtceDtlUrl') or item.get('pblancDtlUrl') or ""
+                    has_target = any(keyword in item_str for keyword in target_keywords)
+                    has_exclude = any(bad_word in title for bad_word in exclude_keywords)
                     
-                    if not detail_url and notice_no != "번호없음":
-                        if "사전규격" in stage_name:
-                            detail_url = f"https://www.g2b.go.kr/link/PRVA004_02/?bfSpecRegNo={notice_no}"
+                    if has_target and not has_exclude:
+                        notice_no = item.get('bidNtceNo') or item.get('pblancNo') or item.get('bfSpecRegNo') or "번호없음"
+                        notice_ord = item.get('bidNtceOrd') or item.get('pblancOrd') or "00"
+                        
+                        if notice_no != "번호없음" and "사전규격" not in stage_name:
+                            full_notice_no = f"{notice_no}-{notice_ord}"
                         else:
-                            detail_url = f"https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo={notice_no}&bidPbancOrd={notice_ord}"
+                            full_notice_no = notice_no
 
-                    msg = (
-                        f"🚨 [{stage_name}] 새 입찰공고\n"
-                        f"공고명: {title}\n"
-                        f"공고번호: {full_notice_no}\n"
-                        f"수요기관: {dept}\n"
-                        f"공고기관: {order_agency}\n"
-                        f"공고일시: {notice_dt}\n"
-                        f"마감일시: {close_dt}\n"
-                        f"배정예산액: {budget_str}\n"
-                        f"{detail_url}"
-                    )
-                    
-                    tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                    while True:
-                        tg_res = requests.post(tg_url, data={'chat_id': chat_id, 'text': msg})
-                        if tg_res.status_code == 429:
-                            retry_after = tg_res.json().get("parameters", {}).get("retry_after", 10)
-                            time.sleep(retry_after + 1)
-                        else:
-                            break
-                    time.sleep(2.0) 
-        except Exception as e:
-            print(f"통신 에러: {e}")
+                        order_agency = item.get('orderInsttNm') or dept 
+                        notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or item.get('opnnRegClseDt') or "정보없음"
+                        close_dt = item.get('bidClseDt') or item.get('opnnFnsDt') or "정보없음"
+                        
+                        budget = item.get('asignBdgtAmt') or item.get('presmptPrce') or item.get('bsnsBdgtAmt') or item.get('totPrce') or item.get('asignBdgtAm') or "0"
+                        try:
+                            budget_str = f"{int(float(budget)):,}원" if budget != "0" else "정보없음"
+                        except:
+                            budget_str = str(budget)
+
+                        detail_url = item.get('bidNtceDtlUrl') or item.get('pblancDtlUrl') or ""
+                        
+                        if not detail_url and notice_no != "번호없음":
+                            if "사전규격" in stage_name:
+                                detail_url = f"https://www.g2b.go.kr/link/PRVA004_02/?bfSpecRegNo={notice_no}"
+                            else:
+                                detail_url = f"https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo={notice_no}&bidPbancOrd={notice_ord}"
+
+                        msg = (
+                            f"🚨 [{stage_name}] 새 입찰공고\n"
+                            f"공고명: {title}\n"
+                            f"공고번호: {full_notice_no}\n"
+                            f"수요기관: {dept}\n"
+                            f"공고일시: {notice_dt}\n"
+                            f"배정예산액: {budget_str}\n"
+                            f"{detail_url}"
+                        )
+                        
+                        while True:
+                            tg_res = requests.post(tg_url, data={'chat_id': chat_id, 'text': msg})
+                            if tg_res.status_code == 429:
+                                retry_after = tg_res.json().get("parameters", {}).get("retry_after", 10)
+                                time.sleep(retry_after + 1)
+                            else:
+                                break
+                        time.sleep(2.0) 
+            except Exception as e:
+                print(f"통신 에러: {e}")
+                break
 
 if __name__ == "__main__":
     run_sniper_bot()
