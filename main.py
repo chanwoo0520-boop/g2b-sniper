@@ -9,12 +9,19 @@ chat_id = "-5450647167"
 target_keywords = ["자연재해", "풍수해", "지방하천", "재해예방", "하천기본계획", "소하천", "소규모공공시설", "재해", "하천정비사업"]
 exclude_keywords = ["공사", "물품", "구매", "제조", "관급자재", "폐기물", "항온습기", "전기", "통신", "소방", "도서관", "학교", "아파트", "환경영향평가", "건설사업", "기술지도", "안전점검"]
 
+# 🔥 핵심 복구: 텔레그램이 막아도 뚫릴 때까지 기다렸다가 악착같이 쏘는 로직
 def send_tg(msg):
     tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    try:
-        requests.post(tg_url, data={'chat_id': chat_id, 'text': msg}, timeout=5)
-    except:
-        pass
+    while True:
+        try:
+            res = requests.post(tg_url, data={'chat_id': chat_id, 'text': msg}, timeout=10)
+            if res.status_code == 429:
+                retry_after = res.json().get("parameters", {}).get("retry_after", 10)
+                time.sleep(retry_after + 1)
+            else:
+                break
+        except Exception as e:
+            time.sleep(5)
 
 def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
@@ -45,7 +52,7 @@ def run_sniper_bot():
         try:
             res = requests.get(url, timeout=15)
             if res.status_code != 200 or not res.text.lstrip().startswith('{'):
-                send_tg(f"⚠️ [{stage_name}] 조달청 통신 실패 (API 권한없음 또는 서버에러)")
+                send_tg(f"⚠️ [{stage_name}] 조달청 통신 실패 (API 에러)")
                 continue
             
             data = res.json()
@@ -55,7 +62,7 @@ def run_sniper_bot():
             for item in items:
                 item_str = str(item)
                 
-                # 🔥 사전규격 전용 기괴한 변수명(rcptNm, korPrcureTgtPrdctNm 등) 완벽 추가
+                # 사전규격 기괴한 변수명 완벽 지원
                 title_candidates = [
                     item.get('pblancNm'), item.get('bidNtceNm'), item.get('bsnsNm'), 
                     item.get('rcptNm'), item.get('prdctNm'), item.get('swBizNm'), 
@@ -75,7 +82,6 @@ def run_sniper_bot():
                     
                     if is_recent:
                         found_count += 1
-                        # 🔥 사전규격 전용 고유번호(rcptNo, prcureRqNo 등) 완벽 추가
                         notice_no = item.get('bidNtceNo') or item.get('pblancNo') or item.get('bfSpecRegNo') or item.get('rcptNo') or item.get('prcureRqNo') or "번호없음"
                         notice_ord = item.get('bidNtceOrd') or item.get('pblancOrd') or "00"
                         
@@ -105,9 +111,9 @@ def run_sniper_bot():
                             f"{detail_url}"
                         )
                         send_tg(msg)
-                        time.sleep(1.0)
+                        time.sleep(1.5)
         except Exception as e:
-            send_tg(f"⚠️ [{stage_name}] 통신 에러: {e}")
+            send_tg(f"⚠️ [{stage_name}] 내부 에러 발생")
 
     send_tg(f"🏁 [스캔 완료] 조달청 공고 총 {total_scanned}건 검사 완료.\n- 타겟 발견 및 전송: {found_count}건")
 
