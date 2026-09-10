@@ -7,8 +7,8 @@ bot_token = "8855852977:AAFSc3R9TJlSnp1UY66nY-4jYGL0RGg0I0I"
 chat_id = "-5450647167" 
 
 target_keywords = ["자연재해", "풍수해", "지방하천", "재해예방", "하천기본계획", "소하천", "소규모공공시설", "재해", "하천정비사업"]
-# 🔥 방어막 대폭 강화 (오타 수정 및 꼼수 단어 추가)
-exclude_keywords = ["공사", "물품", "구매", "제조", "관급자재", "폐기물", "폐아스콘", "처리용역", "항온항습기", "전기", "통신", "소방", "도서관", "학교", "아파트", "환경영향평가", "건설사업", "기술지도", "안전점검", "유지보수", "재구축", "시스템", "S/W", "소프트웨어"]
+# 🔥 산업재해, 연구용역 방어막 완벽 추가 완료!
+exclude_keywords = ["공사", "물품", "구매", "제조", "관급자재", "폐기물", "폐아스콘", "처리용역", "항온항습기", "전기", "통신", "소방", "도서관", "학교", "아파트", "환경영향평가", "건설사업", "기술지도", "안전점검", "유지보수", "재구축", "시스템", "S/W", "소프트웨어", "산업재해", "연구용역"]
 
 def send_tg(msg):
     tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -28,7 +28,6 @@ def get_title(item):
     return "제목 없음"
 
 def get_no(item):
-    # 🔥 사전규격 물품 전용 번호(prcureRqNo) 등 모든 경우의 수 추가
     for key in ['bidNtceNo', 'pblancNo', 'bfSpecRegNo', 'rcptNo', 'prcureRqNo', 'rgstNo', 'ntceNo']:
         if item.get(key):
             return str(item.get(key)).strip()
@@ -37,7 +36,7 @@ def get_no(item):
 def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
     now = datetime.now(KST)
-    send_tg(f"🚀 [V6 최종 영점조절] 정밀 타격 레이더를 가동합니다. ({now.strftime('%H:%M')})")
+    send_tg(f"🚀 [V6.1 찐최종] 완벽한 방어막으로 정밀 타격을 시작합니다. ({now.strftime('%H:%M')})")
     
     past = now - timedelta(days=3)
     bgn_dt = past.strftime('%Y%m%d0000') 
@@ -74,7 +73,6 @@ def run_sniper_bot():
                 title = get_title(item)
                 dept = item.get('dminsttNm') or item.get('demandInsttNm') or item.get('orderInsttNm') or item.get('insttNm') or "기관명 없음"
                 
-                # 🔥 핵심 수정: 너무 예민했던 레이더를 끄고, 오직 [제목] 안에서만 타겟 키워드를 찾습니다.
                 has_target = any(kw in title for kw in target_keywords)
                 has_exclude = any(bw in title for bw in exclude_keywords)
                 
