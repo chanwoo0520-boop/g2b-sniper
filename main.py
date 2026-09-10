@@ -16,13 +16,13 @@ def run_sniper_bot():
     bgn_dt = now_kst.strftime('%Y%m%d0000') 
     end_dt = now_kst.strftime('%Y%m%d2359') 
 
-    # 🔥 수정 포인트: 공무원이 어디에 올리든 다 잡기 위해 사전규격을 용역, 공사, 물품 3개로 나눠서 전부 털어버립니다.
+    # 🔥 핵심 수정: inqryDiv=1(등록일) -> inqryDiv=2(공개일/입찰공고일)로 완벽 교체
     endpoints = {
         "1단계_발주계획": f"https://apis.data.go.kr/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격_용역": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격_공사": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureCnstwkInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격_물품": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "3단계_입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json"
+        "2단계_사전규격_용역": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=2&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_공사": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureCnstwkInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=2&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_물품": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=2&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "3단계_입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=2&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json"
     }
 
     for stage_name, url in endpoints.items():
@@ -34,14 +34,12 @@ def run_sniper_bot():
             items = data.get('response', {}).get('body', {}).get('items', [])
             
             for item in items:
-                # 데이터를 통째로 텍스트로 변환해서 단 한 글자의 키워드라도 스치면 포착하게 만듭니다.
                 item_str = str(item)
                 
                 title_candidates = [item.get('pblancNm'), item.get('bidNtceNm'), item.get('bsnsNm'), item.get('rcptNm'), item.get('prdctNm'), item.get('swBizNm'), item.get('cnstwkNm'), item.get('servcNm')]
                 title = next((t for t in title_candidates if t), "제목 없음")
                 dept = item.get('dminsttNm') or item.get('demandInsttNm') or item.get('orderInsttNm') or item.get('insttNm') or "기관명 없음"
                 
-                # 타겟은 딕셔너리 전체에서 샅샅이 뒤지고, 제외어는 엄격하게 '제목'에 있을 때만 버립니다.
                 has_target = any(keyword in item_str for keyword in target_keywords)
                 has_exclude = any(bad_word in title for bad_word in exclude_keywords)
                 
