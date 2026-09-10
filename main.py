@@ -13,12 +13,8 @@ def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     
-    # 오늘 날짜 텍스트 (예: '2026-09-10' 또는 '20260910')
-    today_str = now_kst.strftime('%Y-%m-%d')
-    today_str_no_dash = now_kst.strftime('%Y%m%d')
-    
-    # 🔥 수정 포인트 1: 공무원의 꼼수를 잡기 위해 '7일 전'부터 오늘까지 넓게 싹쓸이합니다.
-    past_kst = now_kst - timedelta(days=7) 
+    # 🔥 논리 오류 해결: 어제부터 오늘까지 2일치 데이터를 무조건 가져옵니다.
+    past_kst = now_kst - timedelta(days=1) 
     bgn_dt = past_kst.strftime('%Y%m%d0000') 
     end_dt = now_kst.strftime('%Y%m%d2359') 
 
@@ -48,12 +44,8 @@ def run_sniper_bot():
                 has_target = any(keyword in item_str for keyword in target_keywords)
                 has_exclude = any(bad_word in title for bad_word in exclude_keywords)
                 
-                notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or item.get('opnnRegClseDt') or "정보없음"
-                
-                # 🔥 수정 포인트 2: 일주일치를 다 뒤지되, 공고 날짜가 '오늘'인 것만 텔레그램으로 발송!
-                is_today = (today_str in notice_dt) or (today_str_no_dash in notice_dt)
-                
-                if has_target and not has_exclude and is_today:
+                # 🔥 멍청한 날짜 필터링(is_today) 삭제! 키워드만 맞으면 무조건 발송
+                if has_target and not has_exclude:
                     notice_no = item.get('bidNtceNo') or item.get('pblancNo') or item.get('bfSpecRegNo') or "번호없음"
                     notice_ord = item.get('bidNtceOrd') or item.get('pblancOrd') or "00"
                     
@@ -63,6 +55,7 @@ def run_sniper_bot():
                         full_notice_no = notice_no
 
                     order_agency = item.get('orderInsttNm') or dept 
+                    notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or item.get('opnnRegClseDt') or "정보없음"
                     close_dt = item.get('bidClseDt') or item.get('opnnFnsDt') or "정보없음"
                     contract_method = item.get('cntrctMthdNm') or item.get('cntrctMthd') or "정보없음"
                     budget = item.get('asignBdgtAmt') or item.get('presmptPrce') or item.get('bsnsBdgtAmt') or item.get('totPrce') or item.get('asignBdgtAm') or "0"
