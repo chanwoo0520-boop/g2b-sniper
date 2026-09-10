@@ -7,7 +7,8 @@ bot_token = "8855852977:AAFSc3R9TJlSnp1UY66nY-4jYGL0RGg0I0I"
 chat_id = "-5450647167" 
 
 target_keywords = ["자연재해", "풍수해", "지방하천", "재해예방", "하천기본계획", "소하천", "소규모공공시설", "재해", "하천정비사업"]
-exclude_keywords = ["공사", "물품", "구매", "제조", "관급자재", "폐기물", "항온습기", "전기", "통신", "소방", "도서관", "학교", "아파트", "환경영향평가", "건설사업", "기술지도", "안전점검"]
+# 🔥 방어막 대폭 강화 (오타 수정 및 꼼수 단어 추가)
+exclude_keywords = ["공사", "물품", "구매", "제조", "관급자재", "폐기물", "폐아스콘", "처리용역", "항온항습기", "전기", "통신", "소방", "도서관", "학교", "아파트", "환경영향평가", "건설사업", "기술지도", "안전점검", "유지보수", "재구축", "시스템", "S/W", "소프트웨어"]
 
 def send_tg(msg):
     tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -16,20 +17,19 @@ def send_tg(msg):
     except:
         pass
 
-# 🔥 핵심 무기 1: 어떤 게시판이든 스스로 제목을 찾아내는 인공지능 탐색기
 def get_title(item):
     for key in ['bidNtceNm', 'pblancNm', 'bsnsNm', 'rcptNm', 'prdctNm', 'cnstwkNm', 'servcNm', 'korPrcureTgtPrdctNm', 'prdctClsfcNoNm']:
         if item.get(key):
             return str(item.get(key)).strip()
     
-    # 정해진 이름이 없으면 딕셔너리를 뒤져서 '이름(Nm)'으로 끝나는 긴 문장을 강제로 뽑아냄
     for k, v in item.items():
         if isinstance(v, str) and k.endswith('Nm') and 'instt' not in k.lower() and len(v) > 5:
             return v.strip()
     return "제목 없음"
 
 def get_no(item):
-    for key in ['bidNtceNo', 'pblancNo', 'bfSpecRegNo', 'rcptNo', 'prcureRqNo']:
+    # 🔥 사전규격 물품 전용 번호(prcureRqNo) 등 모든 경우의 수 추가
+    for key in ['bidNtceNo', 'pblancNo', 'bfSpecRegNo', 'rcptNo', 'prcureRqNo', 'rgstNo', 'ntceNo']:
         if item.get(key):
             return str(item.get(key)).strip()
     return "번호없음"
@@ -37,9 +37,8 @@ def get_no(item):
 def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
     now = datetime.now(KST)
-    send_tg(f"🚀 [V5 시스템 리셋] 땜질 코드 폐기, 백지에서 정찰을 시작합니다. ({now.strftime('%H:%M')})")
+    send_tg(f"🚀 [V6 최종 영점조절] 정밀 타격 레이더를 가동합니다. ({now.strftime('%H:%M')})")
     
-    # 깔끔하게 최근 3일치 데이터만 탐색
     past = now - timedelta(days=3)
     bgn_dt = past.strftime('%Y%m%d0000') 
     end_dt = now.strftime('%Y%m%d2359') 
@@ -66,24 +65,18 @@ def run_sniper_bot():
             if not items:
                 continue
                 
-            # 조달청 API 구조가 딕셔너리로 올 경우 리스트로 강제 변환 (에러 방지)
             if isinstance(items, dict):
                 items = [items]
                 
             total_scanned += len(items)
             
             for item in items:
-                item_str = str(item)
                 title = get_title(item)
                 dept = item.get('dminsttNm') or item.get('demandInsttNm') or item.get('orderInsttNm') or item.get('insttNm') or "기관명 없음"
                 
-                # 🔥 핵심 무기 2: 타겟은 전체에서 찾고, 제외어는 제목에서 거르되 제목이 없으면 전체에서 거름 (완벽 차단)
-                has_target = any(kw in item_str for kw in target_keywords)
-                
-                if title == "제목 없음":
-                    has_exclude = any(bw in item_str for bw in exclude_keywords)
-                else:
-                    has_exclude = any(bw in title for bw in exclude_keywords)
+                # 🔥 핵심 수정: 너무 예민했던 레이더를 끄고, 오직 [제목] 안에서만 타겟 키워드를 찾습니다.
+                has_target = any(kw in title for kw in target_keywords)
+                has_exclude = any(bw in title for bw in exclude_keywords)
                 
                 if has_target and not has_exclude:
                     found_count += 1
@@ -121,9 +114,9 @@ def run_sniper_bot():
                     time.sleep(1.0)
                     
         except Exception as e:
-            continue # 에러 나도 멈추지 않고 다음 게시판으로 넘어감
+            continue
 
-    send_tg(f"🏁 [V5 스캔 완료] 총 {total_scanned}건 검사, {found_count}건 전송 완료.")
+    send_tg(f"🏁 [스캔 완료] 총 {total_scanned}건 검사, {found_count}건 전송 완료.")
 
 if __name__ == "__main__":
     run_sniper_bot()
