@@ -13,16 +13,18 @@ def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     
-    bgn_dt = now_kst.strftime('%Y%m%d0000') 
+    # 🔥 사령관님 추리대로 적용: 어제(하루 전) 자정부터 현재까지 이틀 치를 싹 뒤집니다.
+    yesterday_kst = now_kst - timedelta(days=1)
+    bgn_dt = yesterday_kst.strftime('%Y%m%d0000') 
     end_dt = now_kst.strftime('%Y%m%d2359') 
 
-    # 🔥 핵심 수정: inqryDiv=1(등록일) -> inqryDiv=2(공개일/입찰공고일)로 완벽 교체
+    # 사전규격은 inqryDiv=1(등록일)로 통일하여 검색 범위를 늘립니다.
     endpoints = {
         "1단계_발주계획": f"https://apis.data.go.kr/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격_용역": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=2&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격_공사": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureCnstwkInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=2&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격_물품": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=2&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "3단계_입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=2&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json"
+        "2단계_사전규격_용역": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_공사": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureCnstwkInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "2단계_사전규격_물품": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        "3단계_입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json"
     }
 
     for stage_name, url in endpoints.items():
