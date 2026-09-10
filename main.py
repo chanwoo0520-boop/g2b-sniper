@@ -20,18 +20,12 @@ def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     
-    # 1. 텔레그램 생존 보고 (시작)
     send_tg(f"🟢 [작전 개시] 조달청 레이더망 가동 ({now_kst.strftime('%H:%M')})")
     
     end_dt = now_kst.strftime('%Y%m%d2359') 
-    
-    # 🎯 맞춤형 날짜 세팅
-    # 사전규격용 (유령등록 잡기위해 14일 전부터 넉넉하게)
     past_14_dt = (now_kst - timedelta(days=14)).strftime('%Y%m%d0000')
-    # 입찰공고용 (데이터 짤림 방지위해 어제부터)
     past_1_dt = (now_kst - timedelta(days=1)).strftime('%Y%m%d0000')
 
-    # 필터링용 날짜 텍스트
     today_str = now_kst.strftime('%Y-%m-%d')
     today_str_no_dash = now_kst.strftime('%Y%m%d')
     yesterday_str = (now_kst - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -50,7 +44,6 @@ def run_sniper_bot():
     for stage_name, url in endpoints.items():
         try:
             res = requests.get(url, timeout=15)
-            # 서버가 데이터를 안 주거나 튕겨내면 즉시 에러 보고
             if res.status_code != 200 or not res.text.lstrip().startswith('{'):
                 send_tg(f"⚠️ [{stage_name}] 조달청 통신 실패 (API 권한없음 또는 서버에러)")
                 continue
@@ -62,7 +55,13 @@ def run_sniper_bot():
             for item in items:
                 item_str = str(item)
                 
-                title_candidates = [item.get('pblancNm'), item.get('bidNtceNm'), item.get('bsnsNm'), item.get('rcptNm'), item.get('prdctNm'), item.get('swBizNm'), item.get('cnstwkNm'), item.get('servcNm')]
+                # 🔥 사전규격 전용 기괴한 변수명(rcptNm, korPrcureTgtPrdctNm 등) 완벽 추가
+                title_candidates = [
+                    item.get('pblancNm'), item.get('bidNtceNm'), item.get('bsnsNm'), 
+                    item.get('rcptNm'), item.get('prdctNm'), item.get('swBizNm'), 
+                    item.get('cnstwkNm'), item.get('servcNm'), 
+                    item.get('korPrcureTgtPrdctNm'), item.get('prdctClsfcNoNm'), item.get('svyNm')
+                ]
                 title = next((t for t in title_candidates if t), "제목 없음")
                 dept = item.get('dminsttNm') or item.get('demandInsttNm') or item.get('orderInsttNm') or item.get('insttNm') or "기관명 없음"
                 
@@ -72,12 +71,12 @@ def run_sniper_bot():
                 if has_target and not has_exclude:
                     notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or item.get('opnnRegClseDt') or "정보없음"
                     
-                    # 🔥 어제 또는 오늘 달력이 찍힌 공고만 발송 (과거 쓰레기 데이터 도배 차단)
                     is_recent = (today_str in notice_dt) or (today_str_no_dash in notice_dt) or (yesterday_str in notice_dt) or (yesterday_str_no_dash in notice_dt)
                     
                     if is_recent:
                         found_count += 1
-                        notice_no = item.get('bidNtceNo') or item.get('pblancNo') or item.get('bfSpecRegNo') or "번호없음"
+                        # 🔥 사전규격 전용 고유번호(rcptNo, prcureRqNo 등) 완벽 추가
+                        notice_no = item.get('bidNtceNo') or item.get('pblancNo') or item.get('bfSpecRegNo') or item.get('rcptNo') or item.get('prcureRqNo') or "번호없음"
                         notice_ord = item.get('bidNtceOrd') or item.get('pblancOrd') or "00"
                         
                         if notice_no != "번호없음" and "사전규격" not in stage_name:
@@ -110,7 +109,6 @@ def run_sniper_bot():
         except Exception as e:
             send_tg(f"⚠️ [{stage_name}] 통신 에러: {e}")
 
-    # 2. 텔레그램 생존 보고 (종료 및 결과)
     send_tg(f"🏁 [스캔 완료] 조달청 공고 총 {total_scanned}건 검사 완료.\n- 타겟 발견 및 전송: {found_count}건")
 
 if __name__ == "__main__":
