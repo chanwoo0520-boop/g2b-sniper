@@ -13,13 +13,13 @@ def run_sniper_bot():
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     
-    # 🎯 수정 포인트: 과거 데이터 찌꺼기를 버리고 '오늘 당일' 데이터만 정밀 타격
     bgn_dt = now_kst.strftime('%Y%m%d0000') 
     end_dt = now_kst.strftime('%Y%m%d2359') 
 
     endpoints = {
         "1단계_발주계획": f"https://apis.data.go.kr/1230000/ao/OrderPlanSttusService/getOrderPlanSttusListServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
-        "2단계_사전규격": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureThngInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
+        # 🎯 핵심 수정: ThngInfoServc(물품) -> ServcInfoServc(용역)으로 완벽 교체
+        "2단계_사전규격": f"https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService/getPublicPrcureServcInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json",
         "3단계_입찰공고": f"https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc?serviceKey={api_key}&numOfRows=999&pageNo=1&inqryDiv=1&inqryBgnDt={bgn_dt}&inqryEndDt={end_dt}&type=json"
     }
 
@@ -32,22 +32,29 @@ def run_sniper_bot():
             items = data.get('response', {}).get('body', {}).get('items', [])
             
             for item in items:
-                title = item.get('pblancNm') or item.get('bidNtceNm') or item.get('bsnsNm') or item.get('prdctNm') or item.get('rcptNm') or item.get('swBizNm') or "제목 없음"
+                # 사전규격(용역) 전용 이름 필드까지 추가 탐색
+                title = item.get('pblancNm') or item.get('bidNtceNm') or item.get('bsnsNm') or item.get('rcptNm') or item.get('prdctNm') or item.get('swBizNm') or "제목 없음"
                 dept = item.get('dminsttNm') or item.get('demandInsttNm') or item.get('orderInsttNm') or item.get('insttNm') or "기관명 없음"
                 
                 has_target = any(keyword in title for keyword in target_keywords)
                 has_exclude = any(bad_word in title for bad_word in exclude_keywords)
                 
                 if has_target and not has_exclude:
-                    notice_no = item.get('bidNtceNo') or item.get('pblancNo') or "번호없음"
+                    # 🎯 수정: 사전규격 전용 등록번호(bfSpecRegNo) 추가
+                    notice_no = item.get('bidNtceNo') or item.get('pblancNo') or item.get('bfSpecRegNo') or "번호없음"
                     notice_ord = item.get('bidNtceOrd') or item.get('pblancOrd') or "00"
-                    full_notice_no = f"{notice_no}-{notice_ord}" if notice_no != "번호없음" else "번호없음"
+                    
+                    if notice_no != "번호없음" and stage_name != "2단계_사전규격":
+                        full_notice_no = f"{notice_no}-{notice_ord}"
+                    else:
+                        full_notice_no = notice_no
+
                     order_agency = item.get('orderInsttNm') or dept 
                     notice_dt = item.get('bidNtceDt') or item.get('pblancDt') or item.get('rgstDt') or "정보없음"
-                    close_dt = item.get('bidClseDt') or "정보없음"
+                    close_dt = item.get('bidClseDt') or item.get('opnnFnsDt') or "정보없음"
                     open_dt = item.get('opengDt')  or "정보없음"
                     contract_method = item.get('cntrctMthdNm') or item.get('cntrctMthd') or "정보없음"
-                    budget = item.get('asignBdgtAmt') or item.get('presmptPrce') or item.get('bsnsBdgtAmt') or item.get('totPrce') or "0"
+                    budget = item.get('asignBdgtAmt') or item.get('presmptPrce') or item.get('bsnsBdgtAmt') or item.get('totPrce') or item.get('asignBdgtAm') or "0"
                     
                     try:
                         budget_str = f"{int(float(budget)):,}원" if budget != "0" else "정보없음"
@@ -55,8 +62,13 @@ def run_sniper_bot():
                         budget_str = str(budget)
 
                     detail_url = item.get('bidNtceDtlUrl') or item.get('pblancDtlUrl') or ""
+                    
+                    # 🎯 수정: 2단계 사전규격 다이렉트 링크 완벽 매칭
                     if not detail_url and notice_no != "번호없음":
-                        detail_url = f"https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo={notice_no}&bidPbancOrd={notice_ord}"
+                        if stage_name == "2단계_사전규격":
+                            detail_url = f"https://www.g2b.go.kr/link/PRVA004_02/?bfSpecRegNo={notice_no}"
+                        else:
+                            detail_url = f"https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo={notice_no}&bidPbancOrd={notice_ord}"
 
                     msg = (
                         f"🚨 [{stage_name}] 새 입찰공고\n"
