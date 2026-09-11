@@ -2,8 +2,8 @@ name: G2B 봇 V3
 
 on:
   workflow_dispatch:
-  schedule:
-  
+
+jobs:
   build:
     runs-on: ubuntu-latest
     steps:
