@@ -3,7 +3,7 @@ name: G2B 봇 V3
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0,3,6,8 * * *'
+    - cron: '17 0,3,6,8 * * *'
 
 jobs:
   build:
